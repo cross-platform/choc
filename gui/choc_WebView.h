@@ -548,7 +548,7 @@ private:
                 if (path == "v") return sendAppAction (self, "paste:");
                 if (path == "z") return sendAppAction (self, "undo:");
                 if (path == "a") return sendAppAction (self, "selectAll:");
-                if (path == "q") return sendAppAction (self, "terminate:");
+                if (path == "q") return sendAppAction (self, "stop:");
             }
             else if (flags == (NSEventModifierFlagShift | NSEventModifierFlagCommand))
             {
