@@ -45,6 +45,7 @@
 #include "../text/choc_TextTable.h"
 #include "../text/choc_Files.h"
 #include "../text/choc_Wildcard.h"
+#include "../text/choc_MIMETypes.h"
 #include "../memory/choc_Base64.h"
 #include "../memory/choc_xxHash.h"
 #include "../math/choc_MathHelpers.h"
@@ -622,6 +623,15 @@ inline void testStringUtilities (TestProgress& progress)
             h64.addInput (t.input.data(), t.input.length());
             CHOC_EXPECT_EQ (t.hash64, h64.getHash());
         }
+    }
+
+    {
+        CHOC_TEST (MIMETypes)
+        CHOC_EXPECT_EQ (choc::web::getMIMETypeFromFilename ("dfsdfsg/sdfgds.txt"), "text/plain");
+        CHOC_EXPECT_EQ (choc::web::getMIMETypeFromFilename (".ogg"), "audio/ogg");
+        CHOC_EXPECT_EQ (choc::web::getMIMETypeFromFilename (".."), "application/text");
+        CHOC_EXPECT_EQ (choc::web::getMIMETypeFromFilename ({}, "blah"), "blah");
+        CHOC_EXPECT_EQ (choc::web::getMIMETypeFromFilename (".ogg?foo...x"), "audio/ogg");
     }
 }
 
@@ -2016,6 +2026,37 @@ inline void testMIDIFiles (TestProgress& progress)
 }
 
 //==============================================================================
+static bool areValuesEqual (const choc::value::ValueView& v1, const choc::value::ValueView& v2)
+{
+    if (choc::json::toString (v1) == choc::json::toString (v2))
+        return true;
+
+    if (((v1.isObject() && v2.isObject()) || (v1.isArray() && v2.isArray()))
+          && v1.getType().getNumElements() == v2.getType().getNumElements())
+    {
+        if (v1.isArray())
+        {
+            for (uint32_t i = 0; i < v1.size(); ++i)
+                if (! areValuesEqual (v1[i], v2[i]))
+                    return false;
+        }
+        else
+        {
+            for (uint32_t i = 0; i < v1.getType().getNumElements(); ++i)
+            {
+                auto m = v1.getType().getObjectMember (i);
+
+                if (! areValuesEqual (v1[m.name], v2[m.name]))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 inline void testJavascript (TestProgress& progress, std::function<choc::javascript::Context()> createContext, bool isDuktape)
 {
     {
@@ -2025,24 +2066,26 @@ inline void testJavascript (TestProgress& progress, std::function<choc::javascri
         {
             auto context = createContext();
 
-            CHOC_EXPECT_EQ (3, context.evaluate ("1 + 2").get<int>());
-            CHOC_EXPECT_EQ (3.5, context.evaluate ("1 + 2.5").get<double>());
-            CHOC_EXPECT_EQ ("hello", context.evaluate ("\"hello\"").get<std::string>());
+            CHOC_EXPECT_EQ (3, context.evaluateExpression ("1 + 2").get<int>());
+            CHOC_EXPECT_EQ (3.5, context.evaluateExpression ("1 + 2.5").get<double>());
+            CHOC_EXPECT_EQ ("hello", context.evaluateExpression ("\"hello\"").get<std::string>());
 
-            context.evaluate ("const x = 100; function foo() { return 200; }");
-            CHOC_EXPECT_EQ (300, context.evaluate ("x + foo()").get<int>());
+            context.run ("const x = 100; function foo() { return 200; }");
+            CHOC_EXPECT_EQ (300, context.evaluateExpression ("x + foo()").get<int>());
 
-            context.evaluate ("const a = [1, 2, 3, [4, 5]]");
-            CHOC_EXPECT_EQ ("[1, 2, 3, [4, 5]]", choc::json::toString (context.evaluate ("a")));
+            context.run ("const a = [1, 2, 3, [4, 5]]");
+            CHOC_EXPECT_EQ ("[1, 2, 3, [4, 5]]", choc::json::toString (context.evaluateExpression ("a")));
 
-            context.evaluate ("const b = [1, 2, 3, { x: 123, y: 4.3, z: [2, 3], s: \"abc\" }, [4, 5], {}]");
-            CHOC_EXPECT_EQ ("[1, 2, 3, {\"x\": 123, \"y\": 4.3, \"z\": [2, 3], \"s\": \"abc\"}, [4, 5], {}]", choc::json::toString (context.evaluate ("b")));
+            context.run ("const b = [1, 2, 3, { x: 123, y: 4.3, z: [2, 3], s: \"abc\" }, [4, 5], {}]");
+            CHOC_EXPECT_TRUE (areValuesEqual (choc::json::parseValue (R"([1, 2, 3, { "x": 123, "y": 4.3, "z": [2, 3], "s": "abc" }, [4, 5], {}])"),
+                                              context.evaluateExpression ("b")));
 
             auto namedChocObj = choc::value::createObject ("foo", "a", 123);
-            context.evaluate ("var c = {}; function setValue (n) { c = n; } ");
+            context.run ("var c = {}; function setValue (n) { c = n; } ");
             context.invoke ("setValue", namedChocObj);
-            CHOC_EXPECT_EQ (json::toString (context.evaluate ("c")), json::toString (namedChocObj));
-            CHOC_EXPECT_EQ (std::string (context.evaluate ("c").getObjectClassName()), std::string (namedChocObj.getObjectClassName()));
+            CHOC_EXPECT_TRUE (areValuesEqual (context.evaluateExpression ("c"), namedChocObj));
+            CHOC_EXPECT_EQ (std::string (context.evaluateExpression ("c").getObjectClassName()),
+                            std::string (namedChocObj.getObjectClassName()));
         }
         CHOC_CATCH_UNEXPECTED_EXCEPTION
     }
@@ -2053,7 +2096,7 @@ inline void testJavascript (TestProgress& progress, std::function<choc::javascri
         try
         {
             auto context = createContext();
-            context.evaluate ("function foo() { dfgdfsg> }");
+            context.evaluateExpression ("dfgdfsg>}");
             CHOC_FAIL ("Expected an error");
         }
         catch (const choc::javascript::Error& e)
@@ -2072,28 +2115,28 @@ inline void testJavascript (TestProgress& progress, std::function<choc::javascri
             auto context = createContext();
 
             context.registerFunction ("addUp", [] (choc::javascript::ArgumentList args) -> choc::value::Value
-                                                   {
-                                                       int total = 0;
-                                                       for (size_t i = 0; i < args.numArgs; ++i)
-                                                           total += args.get<int>(i);
+                                                {
+                                                    int total = 0;
+                                                    for (size_t i = 0; i < args.numArgs; ++i)
+                                                        total += args.get<int>(i);
 
-                                                       return choc::value::createInt32 (total);
-                                                   });
+                                                    return choc::value::createInt32 (total);
+                                                });
 
             context.registerFunction ("concat", [] (choc::javascript::ArgumentList args) -> choc::value::Value
-                                                   {
-                                                       std::string s;
+                                                {
+                                                    std::string s;
 
-                                                       for (auto& arg : args)
-                                                           s += arg.get<std::string>();
+                                                    for (auto& arg : args)
+                                                        s += arg.get<std::string>();
 
-                                                       return choc::value::createString (s);
-                                                   });
+                                                    return choc::value::createString (s);
+                                                });
 
-            CHOC_EXPECT_EQ (50, context.evaluate ("addUp (11, 12, 13, 14)").get<int>());
-            CHOC_EXPECT_EQ (45, context.evaluate ("addUp (11, 12, addUp (1, 1)) + addUp (5, 15)").get<int>());
-            CHOC_EXPECT_EQ ("abcdef", context.evaluate ("concat (\"abc\", \"def\")").get<std::string>());
-            CHOC_EXPECT_TRUE (context.evaluate ("const xx = concat (\"abc\", \"def\")").isVoid());
+            CHOC_EXPECT_EQ (50, context.evaluateExpression ("addUp (11, 12, 13, 14)").get<int>());
+            CHOC_EXPECT_EQ (45, context.evaluateExpression ("addUp (11, 12, addUp (1, 1)) + addUp (5, 15)").get<int>());
+            CHOC_EXPECT_EQ ("abcdef", context.evaluateExpression ("concat (\"abc\", \"def\")").get<std::string>());
+            CHOC_EXPECT_TRUE (context.evaluateExpression ("const xx = concat (\"abc\", \"def\")").isVoid());
 
             CHOC_EXPECT_EQ (0,   context.invoke ("addUp").get<int>());
             CHOC_EXPECT_EQ (123, context.invoke ("addUp", 123).get<int>());
@@ -2104,12 +2147,46 @@ inline void testJavascript (TestProgress& progress, std::function<choc::javascri
             std::vector<int> args = { 100, 1, 10 };
             CHOC_EXPECT_EQ (111, context.invokeWithArgList ("addUp", args).get<int>());
 
-            context.evaluate ("function appendStuff (n) { return n + \"xx\"; }");
+            context.run ("function appendStuff (n) { return n + \"xx\"; }");
 
             CHOC_EXPECT_EQ ("abcxx",  std::string (context.invoke ("appendStuff", std::string_view ("abc")).getString()));
             CHOC_EXPECT_EQ ("abcxx",  std::string (context.invoke ("appendStuff", std::string ("abc")).getString()));
             CHOC_EXPECT_EQ ("abcxx",  std::string (context.invoke ("appendStuff", "abc").getString()));
             CHOC_EXPECT_EQ ("truexx", std::string (context.invoke ("appendStuff", true).getString()));
+        }
+        CHOC_CATCH_UNEXPECTED_EXCEPTION
+    }
+
+    {
+        CHOC_TEST (Async)
+
+        try
+        {
+            auto context = createContext();
+
+            context.run ("var x = 1234;");
+            choc::value::Value result;
+            std::string error;
+
+            choc::messageloop::postMessage ([&]
+            {
+                context.run ("dfjdfghj.dfgdfsg()",
+                    [&] (const std::string& e, const choc::value::ValueView&)
+                    {
+                        error = e;
+                    });
+
+                context.run ("x + 1",
+                    [&] (const std::string&, const choc::value::ValueView& r)
+                    {
+                        result = r;
+                        choc::messageloop::stop();
+                    });
+            });
+
+            choc::messageloop::run();
+            CHOC_EXPECT_EQ ("1235", choc::json::toString (result));
+            CHOC_EXPECT_TRUE (! error.empty());
         }
         CHOC_CATCH_UNEXPECTED_EXCEPTION
     }
@@ -2120,15 +2197,6 @@ inline void testJavascript (TestProgress& progress, std::function<choc::javascri
 
         try
         {
-            choc::javascript::Context::ReadModuleContentFn fetchModule
-                = [] (std::string_view name) -> std::optional<std::string>
-            {
-                if (name == "test_module")
-                    return "export function wasOK() { return true; }";
-
-                return {};
-            };
-
             auto context = createContext();
             bool worked = false;
 
@@ -2138,12 +2206,26 @@ inline void testJavascript (TestProgress& progress, std::function<choc::javascri
                                                      return {};
                                                  });
 
-            context.evaluate (R"(
-                import * as XX from "test_module";
-                if (XX.wasOK()) success();
-            )",
-            std::addressof (fetchModule));
+            choc::messageloop::postMessage ([&]
+            {
+                context.runModule (R"(
+                    import * as XX from "test_module";
+                    if (XX.wasOK()) success();
+                    )",
+                    [] (std::string_view name) -> std::optional<std::string>
+                    {
+                        if (name == "test_module")
+                            return "export function wasOK() { return true; }";
 
+                        return {};
+                    },
+                    [] (const std::string&, const choc::value::ValueView&)
+                    {
+                        choc::messageloop::stop();
+                    });
+            });
+
+            choc::messageloop::run();
             CHOC_EXPECT_TRUE (worked);
         }
         CHOC_CATCH_UNEXPECTED_EXCEPTION
@@ -2166,7 +2248,7 @@ inline void testJavascript (TestProgress& progress, std::function<choc::javascri
 
             auto t = choc::messageloop::Timer (100, [&]
             {
-                context.evaluate (R"(
+                context.run (R"(
                     var result = 0;
                     var intID;
 
@@ -2218,7 +2300,7 @@ inline void testJavascript (TestProgress& progress, std::function<choc::javascri
                 output += std::to_string (static_cast<int> (level));
             });
 
-            context.evaluate (R"(
+            context.run (R"(
                 console.log ("log");
                 console.info ("infoa", "infob");
                 console.warn ("warn");
@@ -2250,35 +2332,106 @@ inline void testJavascript (TestProgress& progress)
 inline void testWebview (TestProgress& progress)
 {
     CHOC_CATEGORY (WebView);
-    CHOC_TEST (Javascript)
 
-    choc::ui::WebView::Options opts;
-    opts.enableDebugMode = true;
-    choc::ui::WebView webview (opts);
-
-    if (! webview.loadedOK())
     {
-        std::cout << "WebView was unavailable" << std::endl;
-        return;
+        CHOC_TEST (Javascript)
+
+        choc::ui::WebView::Options opts;
+        opts.enableDebugMode = true;
+        choc::ui::WebView webview (opts);
+
+        if (! webview.loadedOK())
+        {
+            std::cout << "WebView was unavailable" << std::endl;
+            return;
+        }
+
+        std::string result;
+
+        webview.bind ("succeeded", [&] (const choc::value::ValueView& args)
+        {
+            result = choc::json::toString (args);
+            choc::messageloop::stop();
+            return choc::value::Value();
+        });
+
+        auto t1 = choc::messageloop::Timer (100, [&]
+        {
+            webview.evaluateJavascript ("succeeded (1234, 5678);");
+            return false;
+        });
+
+        std::string error1, error2, error3;
+        choc::value::Value value1, value2, value3;
+
+        webview.evaluateJavascript ("let a = { x: [1, 2, 3], y: 987.0, z: true }; a", [&] (const std::string& error, const choc::value::ValueView& value)
+        {
+            error1 = error; value1 = value;
+        });
+
+        webview.evaluateJavascript ("return 1234;", [&] (const std::string& error, const choc::value::ValueView& value)
+        {
+            error2 = error; value2 = value;
+        });
+
+        webview.evaluateJavascript ("", [&] (const std::string& error, const choc::value::ValueView& value)
+        {
+            error3 = error; value3 = value;
+        });
+
+        choc::messageloop::run();
+        CHOC_EXPECT_EQ (result, "[1234, 5678]");
+        CHOC_EXPECT_TRUE (error1.empty());
+        CHOC_EXPECT_EQ (choc::json::toString (value1), R"({"x": [1, 2, 3], "y": 987, "z": true})");
+        CHOC_EXPECT_TRUE (! error2.empty());
+        CHOC_EXPECT_TRUE (value2.isVoid());
+        CHOC_EXPECT_TRUE (error3.empty());
+        CHOC_EXPECT_TRUE (value3.isVoid());
     }
 
-    std::string result;
-
-    webview.bind ("succeeded", [&] (const choc::value::ValueView& args)
     {
-        result = choc::json::toString (args);
-        choc::messageloop::stop();
-        return choc::value::Value();
-    });
+        CHOC_TEST (CustomResource);
 
-    auto t1 = choc::messageloop::Timer (100, [&]
-    {
-        webview.evaluateJavascript ("succeeded (1234, 5678);");
-        return false;
-    });
+        choc::ui::WebView::Options opts;
+        opts.enableDebugMode = true;
 
-    choc::messageloop::run();
-    CHOC_EXPECT_EQ (result, "[1234, 5678]");
+        opts.fetchResource = [&] (const std::string& path) -> choc::ui::WebView::Options::Resource
+        {
+            if (path == "/")
+            {
+                return { R"(<!DOCTYPE html> <html>
+<script>
+fetch (new Request("./hello.txt"))
+   .then (response => response.text())
+   .then (text => succeeded (text));
+</script>
+</html>)",
+                         "text/html" };
+            }
+
+            return { path, "text/plain" };
+        };
+
+        choc::ui::WebView webview (opts);
+
+        if (! webview.loadedOK())
+        {
+            std::cout << "WebView was unavailable" << std::endl;
+            return;
+        }
+
+        std::string result;
+
+        webview.bind ("succeeded", [&] (const choc::value::ValueView& args)
+        {
+            result = choc::json::toString (args);
+            choc::messageloop::stop();
+            return choc::value::Value();
+        });
+
+        choc::messageloop::run();
+        CHOC_EXPECT_TRUE (choc::text::contains (result, "hello.txt"));
+    }
 }
 
 //==============================================================================
@@ -2583,8 +2736,16 @@ inline void testTimers (TestProgress& progress)
             return false;
         });
 
+        bool messageThread1 = false, messageThread2 = false;
+        choc::messageloop::postMessage ([&] { messageThread1 = choc::messageloop::callerIsOnMessageThread(); });
+        auto t = std::thread ([&] { messageThread2 = ! choc::messageloop::callerIsOnMessageThread(); });
+
         choc::messageloop::run();
+
+        t.join();
         CHOC_EXPECT_EQ (messageCount, 13);
+        CHOC_EXPECT_TRUE (messageThread1);
+        CHOC_EXPECT_TRUE (messageThread2);
     }
 }
 

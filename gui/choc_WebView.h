@@ -82,25 +82,40 @@ public:
         // this empty for default behaviour.
         std::string customUserAgent;
 
+        /// If you provide a fetchResource function, it is expected to return this
+        /// object, which is simply the raw content of the resource, and its MIME type.
+        struct Resource
+        {
+            Resource() = default;
+            Resource (std::string_view content, std::string mimeType);
+
+            std::vector<uint8_t> data;
+            std::string mimeType;
+        };
+
+        using FetchResource = std::function<std::optional<Resource>(const std::string& path)>;
+
         /// Serve resources to the browser from a C++ callback function.
         /// This can effectively be used to implement a basic web server,
         /// serving resources to the browser in any way the client code chooses.
         /// Given the path URL component (i.e. starting from "/"), the client should
         /// return some bytes, and the associated MIME type, for that resource.
         /// When provided, this function will initially be called with the root path
-        /// ("/") in order to serve the initial content for the page.
-        /// (i.e. the client should return some HTML with a "text/html" MIME type).
-        /// Subsequent relative requests made from the page (i.e. via `img` tags,
-        /// `fetch` calls from javascript etc) will result in subsequent calls here.
-        struct Resource
-        {
-            std::vector<uint8_t> data;
-            std::string mimeType;
-        };
-
-        using Path = std::string;
-        using FetchResource = std::function<std::optional<Resource>(const Path&)>;
+        /// ("/") in order to serve the initial content for the page (or if the
+        /// customSchemeURI property is also set, it will navigate to that URI).
+        /// When this happens, the client should return some HTML with a "text/html"
+        /// MIME type.
+        /// Subsequent relative requests made from the page (e.g. via `img` tags,
+        /// `fetch` calls from javascript etc) will all invoke calls to this callback
+        /// with the requested path as their argument.
         FetchResource fetchResource;
+
+        /// If fetchResource is being used to serve custom data, you can choose to
+        /// override the default URI scheme by providing a home URI here, e.g. if
+        /// you wanted a scheme called `foo:`, you might set this to `foo://myname.com`
+        /// and the view will navigate to that address when launched.
+        /// Leave blank for a default.
+        std::string customSchemeURI;
     };
 
     /// Creates a WebView with default options
@@ -120,12 +135,17 @@ public:
     /// Directly sets the HTML content of the browser
     bool setHTML (const std::string& html);
 
-    /// Directly evaluates some javascript.
-    /// This call isn't guaranteed to be thread-safe, so calling it on
-    /// threads other than the main message thread could lead to problems.
-    /// It also goes without saying this this is not realtime-safe, and the
-    /// call may block, allocate or make system calls.
-    bool evaluateJavascript (const std::string& script);
+    /// This function type is used by evaluateJavascript().
+    using CompletionHandler = std::function<void(const std::string& error,
+                                                 const choc::value::ValueView& result)>;
+
+    /// Asynchronously evaluates some javascript.
+    /// If you want to find out the result of the expression (or whether there
+    /// was a compile error etc), then provide a callback function which will be
+    /// invoked when the script is complete.
+    /// This will return true if the webview is in a state that lets it run code, or
+    /// false if something prevents that.
+    bool evaluateJavascript (const std::string& script, CompletionHandler completionHandler = {});
 
     /// Sends the browser to this URL
     bool navigate (const std::string& url);
@@ -151,6 +171,9 @@ private:
 
     std::unordered_map<std::string, CallbackFn> bindings;
     void invokeBinding (const std::string&);
+    static std::string getURIScheme (const Options&);
+    static std::string getURIHome (const Options&);
+    struct DeletionChecker { bool deleted = false; };
 };
 
 } // namespace choc::ui
@@ -182,6 +205,7 @@ struct choc::ui::WebView::Pimpl
         if (! gtk_init_check (nullptr, nullptr))
             return;
 
+        defaultURI = getURIHome (options);
         webviewContext = webkit_web_context_new();
         g_object_ref_sink (G_OBJECT (webviewContext));
         webview = webkit_web_view_new_with_context (webviewContext);
@@ -214,7 +238,7 @@ struct choc::ui::WebView::Pimpl
 
         if (options.fetchResource)
         {
-            const auto onResourceRequested = [](auto* request, auto* context)
+            const auto onResourceRequested = [] (auto* request, auto* context)
             {
                 try
                 {
@@ -262,9 +286,8 @@ struct choc::ui::WebView::Pimpl
                 }
             };
 
-            webkit_web_context_register_uri_scheme (webviewContext, "choc", onResourceRequested, this, nullptr);
-
-            navigate ("choc://choc.choc/");
+            webkit_web_context_register_uri_scheme (webviewContext, getURIScheme (options).c_str(), onResourceRequested, this, nullptr);
+            navigate ({});
         }
 
         gtk_widget_show_all (webview);
@@ -272,6 +295,8 @@ struct choc::ui::WebView::Pimpl
 
     ~Pimpl()
     {
+        deletionChecker->deleted = true;
+
         if (signalHandlerID != 0 && webview != nullptr)
             g_signal_handler_disconnect (manager, signalHandlerID);
 
@@ -284,18 +309,103 @@ struct choc::ui::WebView::Pimpl
     bool loadedOK() const           { return getViewHandle() != nullptr; }
     void* getViewHandle() const     { return (void*) webview; }
 
-    bool evaluateJavascript (const std::string& js)
+    std::shared_ptr<DeletionChecker> deletionChecker { std::make_shared<DeletionChecker>() };
+
+    bool evaluateJavascript (const std::string& js, CompletionHandler&& completionHandler)
     {
+        GAsyncReadyCallback callback = {};
+        gpointer userData = {};
+
+        if (completionHandler)
+        {
+            callback = evaluationCompleteCallback;
+            userData = new CompletionHandler (std::move (completionHandler));
+        }
+
        #if WEBKIT_CHECK_VERSION (2, 40, 0)
-        webkit_web_view_evaluate_javascript (WEBKIT_WEB_VIEW (webview), js.c_str(), static_cast<gssize> (js.length()), nullptr, nullptr, nullptr, nullptr, nullptr);
+        webkit_web_view_evaluate_javascript (WEBKIT_WEB_VIEW (webview), js.c_str(), static_cast<gssize> (js.length()),
+                                             nullptr, nullptr, nullptr, callback, userData);
        #else
-        webkit_web_view_run_javascript (WEBKIT_WEB_VIEW (webview), js.c_str(), nullptr, nullptr, nullptr);
+        webkit_web_view_run_javascript (WEBKIT_WEB_VIEW (webview), js.c_str(), nullptr, callback, userData);
        #endif
         return true;
     }
 
+    static void evaluationCompleteCallback (GObject* object, GAsyncResult* result, gpointer userData)
+    {
+        std::unique_ptr<CompletionHandler> completionHandler (reinterpret_cast<CompletionHandler*> (userData));
+        choc::value::Value value;
+        std::string errorMessage;
+        GError* error = {};
+
+       #if WEBKIT_CHECK_VERSION (2, 40, 0)
+        if (auto js_result = webkit_web_view_evaluate_javascript_finish (WEBKIT_WEB_VIEW (object), result, &error))
+       #else
+        if (auto js_result = webkit_web_view_run_javascript_finish (WEBKIT_WEB_VIEW (object), result, &error))
+       #endif
+        {
+            if (error != nullptr)
+            {
+                errorMessage = error->message;
+                g_error_free (error);
+            }
+
+           #if WEBKIT_CHECK_VERSION (2, 40, 0)
+            if (auto js_value = js_result)
+           #else
+            if (auto js_value = webkit_javascript_result_get_js_value (js_result))
+           #endif
+            {
+                if (auto json = jsc_value_to_json (js_value, 0))
+                {
+                    try
+                    {
+                        auto jsonView = std::string_view (json);
+
+                        if (! jsonView.empty())
+                            value = choc::json::parseValue (jsonView);
+                    }
+                    catch (const std::exception& e)
+                    {
+                        if (errorMessage.empty())
+                            errorMessage = e.what();
+                    }
+
+                    g_free (json);
+                }
+                else
+                {
+                    if (errorMessage.empty())
+                        errorMessage = "Failed to convert result to JSON";
+                }
+
+               #if WEBKIT_CHECK_VERSION (2, 40, 0)
+                g_object_unref (js_value);
+               #endif
+            }
+            else
+            {
+                if (errorMessage.empty())
+                    errorMessage = "Failed to fetch result";
+            }
+
+           #if ! WEBKIT_CHECK_VERSION (2, 40, 0)
+            webkit_javascript_result_unref (js_result);
+           #endif
+        }
+        else
+        {
+            errorMessage = "Failed to fetch result";
+        }
+
+        (*completionHandler) (errorMessage, value);
+    }
+
     bool navigate (const std::string& url)
     {
+        if (url.empty())
+            return navigate (defaultURI);
+
         webkit_web_view_load_uri (WEBKIT_WEB_VIEW (webview), url.c_str());
         return true;
     }
@@ -332,6 +442,7 @@ struct choc::ui::WebView::Pimpl
     WebKitWebContext* webviewContext = {};
     GtkWidget* webview = {};
     WebKitUserContentManager* manager = {};
+    std::string defaultURI;
     unsigned long signalHandlerID = 0;
 };
 
@@ -347,6 +458,8 @@ struct choc::ui::WebView::Pimpl
     {
         using namespace choc::objc;
         CHOC_AUTORELEASE_BEGIN
+
+        defaultURI = getURIHome (*options);
 
         id config = call<id> (getClass ("WKWebViewConfiguration"), "new");
 
@@ -366,7 +479,7 @@ struct choc::ui::WebView::Pimpl
         call<void> (manager, "addScriptMessageHandler:name:", delegate, getNSString ("external"));
 
         if (options->fetchResource)
-            call<void> (config, "setURLSchemeHandler:forURLScheme:", delegate, getNSString ("choc"));
+            call<void> (config, "setURLSchemeHandler:forURLScheme:", delegate, getNSString (getURIScheme (*options)));
 
         webview = call<id> (allocateWebview(), "initWithFrame:configuration:", CGRect(), config);
         objc_setAssociatedObject (webview, "choc_webview", (CHOC_OBJC_CAST_BRIDGED id) this, OBJC_ASSOCIATION_ASSIGN);
@@ -380,7 +493,7 @@ struct choc::ui::WebView::Pimpl
         call<void> (config, "release");
 
         if (options->fetchResource)
-            navigate ("choc://choc.choc/");
+            navigate ({});
 
         CHOC_AUTORELEASE_END
     }
@@ -388,12 +501,16 @@ struct choc::ui::WebView::Pimpl
     ~Pimpl()
     {
         CHOC_AUTORELEASE_BEGIN
+        deletionChecker->deleted = true;
         objc_setAssociatedObject (delegate, "choc_webview", nil, OBJC_ASSOCIATION_ASSIGN);
         objc_setAssociatedObject (webview, "choc_webview", nil, OBJC_ASSOCIATION_ASSIGN);
         objc::call<void> (webview, "release");
+        webview = {};
         objc::call<void> (manager, "removeScriptMessageHandlerForName:", objc::getNSString ("external"));
         objc::call<void> (manager, "release");
+        manager = {};
         objc::call<void> (delegate, "release");
+        delegate = {};
         CHOC_AUTORELEASE_END
     }
 
@@ -401,6 +518,8 @@ struct choc::ui::WebView::Pimpl
 
     bool loadedOK() const           { return getViewHandle() != nullptr; }
     void* getViewHandle() const     { return (CHOC_OBJC_CAST_BRIDGED void*) webview; }
+
+    std::shared_ptr<DeletionChecker> deletionChecker { std::make_shared<DeletionChecker>() };
 
     bool addInitScript (const std::string& script)
     {
@@ -421,6 +540,9 @@ struct choc::ui::WebView::Pimpl
 
     bool navigate (const std::string& url)
     {
+        if (url.empty())
+            return navigate (defaultURI);
+
         using namespace choc::objc;
         CHOC_AUTORELEASE_BEGIN
 
@@ -438,12 +560,58 @@ struct choc::ui::WebView::Pimpl
         CHOC_AUTORELEASE_END
     }
 
-    bool evaluateJavascript (const std::string& script)
+    bool evaluateJavascript (const std::string& script, CompletionHandler completionHandler)
     {
         CHOC_AUTORELEASE_BEGIN
-        objc::call<void> (webview, "evaluateJavaScript:completionHandler:", objc::getNSString (script), (id) nullptr);
+        auto s = objc::getNSString (script);
+
+        if (completionHandler)
+        {
+            objc::call<void> (webview, "evaluateJavaScript:completionHandler:", s,
+                              ^(id result, id error)
+                              {
+                                  CHOC_AUTORELEASE_BEGIN
+
+                                  auto errorMessage = getMessageFromNSError (error);
+                                  choc::value::Value value;
+
+                                  try
+                                  {
+                                      if (auto json = convertNSObjectToJSON (result); ! json.empty())
+                                          value = choc::json::parseValue (json);
+                                  }
+                                  catch (const std::exception& e)
+                                  {
+                                      errorMessage = e.what();
+                                  }
+
+                                  completionHandler (errorMessage, value);
+                                  CHOC_AUTORELEASE_END
+                              });
+        }
+        else
+        {
+            objc::call<void> (webview, "evaluateJavaScript:completionHandler:", s, (id) nullptr);
+        }
+
         return true;
         CHOC_AUTORELEASE_END
+    }
+
+    static std::string convertNSObjectToJSON (id value)
+    {
+        if (value)
+        {
+            if (id nsData = objc::call<id> (objc::getClass ("NSJSONSerialization"), "dataWithJSONObject:options:error:",
+                                            value, 12, (id) nullptr))
+            {
+                auto data = objc::call<void*> (nsData, "bytes");
+                auto length = objc::call<unsigned long> (nsData, "length");
+                return std::string (static_cast<const char*> (data), static_cast<size_t> (length));
+            }
+        }
+
+        return {};
     }
 
 private:
@@ -457,6 +625,21 @@ private:
     {
         static WebviewClass c;
         return objc::call<id> ((id) c.webviewClass, "alloc");
+    }
+
+    static std::string getMessageFromNSError (id nsError)
+    {
+        if (nsError)
+        {
+            if (id userInfo = objc::call<id> (nsError, "userInfo"))
+                if (id message = objc::call<id> (userInfo, "objectForKey:", objc::getNSString ("WKJavaScriptExceptionMessage")))
+                    if (auto s = objc::getString (message); ! s.empty())
+                        return s;
+
+            return objc::getString (objc::call<id> (nsError, "localizedDescription"));
+        }
+
+        return {};
     }
 
     void onResourceRequested (id task)
@@ -566,10 +749,8 @@ private:
         if (objc::call<int> (error, "code") == NSURLErrorCancelled)
             return;
 
-        auto errorString = objc::getString (objc::call<id> (error, "localizedDescription"));
-
         setHTML ("<!DOCTYPE html><html><head><title>Error</title></head>"
-                 "<body><h2>" + errorString + "</h2></body></html>");
+                 "<body><h2>" + getMessageFromNSError (error) + "</h2></body></html>");
     }
 
     static Pimpl* getPimpl (id self)
@@ -582,6 +763,7 @@ private:
     // to 16, which then conflicts with obj-C pointer alignment...
     std::unique_ptr<Options> options;
     id webview = {}, manager = {}, delegate = {};
+    std::string defaultURI;
 
     struct WebviewClass
     {
@@ -1076,6 +1258,13 @@ public:
     virtual HRESULT STDMETHODCALLTYPE put_ReasonPhrase(LPCWSTR) = 0;
 };
 
+MIDL_INTERFACE("49511172-cc67-4bca-9923-137112f4c4cc")
+ICoreWebView2ExecuteScriptCompletedHandler : public IUnknown
+{
+public:
+    virtual HRESULT STDMETHODCALLTYPE Invoke (HRESULT, LPCWSTR) = 0;
+};
+
 }
 
 #endif // __webview2_h__
@@ -1102,6 +1291,9 @@ struct WebView::Pimpl
         if (hwnd.hwnd == nullptr)
             return;
 
+        defaultURI = getURIHome (options);
+        setHTMLURI = defaultURI + "getHTMLInternal";
+
         SetWindowLongPtr (hwnd, GWLP_USERDATA, (LONG_PTR) this);
 
         if (createEmbeddedWebView())
@@ -1113,6 +1305,8 @@ struct WebView::Pimpl
 
     ~Pimpl()
     {
+        deletionChecker->deleted = true;
+
         if (coreWebView != nullptr)
         {
             coreWebView->Release();
@@ -1130,6 +1324,8 @@ struct WebView::Pimpl
             coreWebViewEnvironment->Release();
             coreWebViewEnvironment = nullptr;
         }
+
+        hwnd.reset();
     }
 
     static constexpr const char* postMessageFn = "window.chrome.webview.postMessage";
@@ -1137,8 +1333,13 @@ struct WebView::Pimpl
     bool loadedOK() const           { return coreWebView != nullptr; }
     void* getViewHandle() const     { return (void*) hwnd.hwnd; }
 
+    std::shared_ptr<DeletionChecker> deletionChecker { std::make_shared<DeletionChecker>() };
+
     bool navigate (const std::string& url)
     {
+        if (url.empty())
+            return navigate (defaultURI);
+
         CHOC_ASSERT (coreWebView != nullptr);
         return coreWebView->Navigate (createUTF16StringFromUTF8 (url).c_str()) == S_OK;
     }
@@ -1149,30 +1350,63 @@ struct WebView::Pimpl
         return coreWebView->AddScriptToExecuteOnDocumentCreated (createUTF16StringFromUTF8 (script).c_str(), nullptr) == S_OK;
     }
 
-    bool evaluateJavascript (const std::string& script)
+    bool evaluateJavascript (const std::string& script, CompletionHandler&& ch)
     {
-        CHOC_ASSERT (coreWebView != nullptr);
-        return coreWebView->ExecuteScript (createUTF16StringFromUTF8 (script).c_str(), nullptr) == S_OK;
+        if (coreWebView == nullptr)
+            return false;
+
+        COMPtr<ExecuteScriptCompletedCallback> callback (ch ? new ExecuteScriptCompletedCallback (std::move (ch))
+                                                            : nullptr);
+
+        return coreWebView->ExecuteScript (createUTF16StringFromUTF8 (script).c_str(), callback) == S_OK;
     }
 
     bool setHTML (const std::string& html)
     {
         CHOC_ASSERT (coreWebView != nullptr);
-
-        pageHTML.data.clear();
-        std::copy (html.begin(), html.end(), std::back_inserter (pageHTML.data));
-        pageHTML.mimeType = "text/html";
-
-        navigate (setHTMLUri);
+        pageHTML = { html, "text/html" };
+        navigate (setHTMLURI);
         return true;
     }
 
 private:
     WindowClass windowClass { L"CHOCWebView", (WNDPROC) wndProc };
     HWNDHolder hwnd;
-    const std::string resourceRequestFilterUriPrefix = "https://choc.localhost/";
-    const std::string setHTMLUri                     = "https://choc.localhost/setHTML";
+    std::string defaultURI, setHTMLURI;
     WebView::Options::Resource pageHTML;
+
+    //==============================================================================
+    template <typename Type>
+    struct COMPtr
+    {
+        COMPtr (const COMPtr&) = delete;
+        COMPtr (COMPtr&&) = delete;
+        COMPtr (Type* o) : object (o) { if (object) object->AddRef(); }
+        ~COMPtr() { if (object) object->Release(); }
+
+        Type* object = nullptr;
+        operator Type*() const  { return object; }
+    };
+
+    static std::string getMessageFromHRESULT (HRESULT hr)
+    {
+        if (hr == S_OK)
+            return {};
+
+        wchar_t* buffer = nullptr;
+        auto length = FormatMessageW (FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+                                      nullptr, (DWORD) hr, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT),
+                                      (LPWSTR) std::addressof (buffer), 0, nullptr);
+
+        if (length > 0)
+        {
+            auto message = createUTF8FromUTF16 (std::wstring (buffer, length));
+            LocalFree (buffer);
+            return message;
+        }
+
+        return choc::text::createHexString (hr);
+    }
 
     static Pimpl* getPimpl (HWND h)     { return (Pimpl*) GetWindowLongPtr (h, GWLP_USERDATA); }
 
@@ -1205,7 +1439,7 @@ private:
     {
         if (auto userDataFolder = getUserDataFolder(); ! userDataFolder.empty())
         {
-            auto handler = new EventHandler (*this);
+            COMPtr<EventHandler> handler (new EventHandler (*this));
             webviewInitialising.test_and_set();
 
             if (auto createCoreWebView2EnvironmentWithOptions = (decltype(&CreateCoreWebView2EnvironmentWithOptions))
@@ -1230,14 +1464,14 @@ private:
                     if (coreWebView == nullptr)
                         return false;
 
-                    const auto wildcardFilter = createUTF16StringFromUTF8 (resourceRequestFilterUriPrefix.c_str()) + L"*";
+                    const auto wildcardFilter = createUTF16StringFromUTF8 (defaultURI + "*");
                     coreWebView->AddWebResourceRequestedFilter (wildcardFilter.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
 
                     EventRegistrationToken token;
                     coreWebView->add_WebResourceRequested (handler, std::addressof (token));
 
                     if (options.fetchResource)
-                        navigate (resourceRequestFilterUriPrefix);
+                        navigate ({});
 
                     ICoreWebView2Settings* settings = nullptr;
 
@@ -1295,10 +1529,10 @@ private:
 
     std::optional<WebView::Options::Resource> fetchResourceOrPageHTML (const std::string& uri)
     {
-        if (uri == setHTMLUri)
+        if (uri == setHTMLURI)
             return pageHTML;
 
-        return options.fetchResource (uri.substr (resourceRequestFilterUriPrefix.size() - 1));
+        return options.fetchResource (uri.substr (defaultURI.size() - 1));
     }
 
     HRESULT onResourceRequested (ICoreWebView2WebResourceRequestedEventArgs* args)
@@ -1472,7 +1706,56 @@ private:
         }
 
         Pimpl& ownerPimpl;
-        std::atomic<unsigned long> refCount { 0 };
+        std::atomic<ULONG> refCount { 0 };
+    };
+
+    //==============================================================================
+    struct ExecuteScriptCompletedCallback  : public ICoreWebView2ExecuteScriptCompletedHandler
+    {
+        ExecuteScriptCompletedCallback (CompletionHandler&& cb) : callback (std::move (cb)) {}
+        virtual ~ExecuteScriptCompletedCallback() {}
+
+        HRESULT STDMETHODCALLTYPE QueryInterface (REFIID refID, void** result) override
+        {
+            if (refID == IID { 0x49511172, 0xcc67, 0x4bca, { 0x99, 0x23, 0x13, 0x71, 0x12, 0xf4, 0xc4, 0xcc } }
+                || refID == IID_IUnknown)
+            {
+                *result = this;
+                AddRef();
+                return S_OK;
+            }
+
+            *result = nullptr;
+            return E_NOINTERFACE;
+        }
+
+        ULONG STDMETHODCALLTYPE AddRef() override     { return ++refCount; }
+        ULONG STDMETHODCALLTYPE Release() override    { auto newCount = --refCount; if (newCount == 0) delete this; return newCount; }
+
+        HRESULT STDMETHODCALLTYPE Invoke (HRESULT hr, LPCWSTR resultJSON) override
+        {
+            std::string errorMessage = getMessageFromHRESULT (hr);
+            choc::value::Value value;
+
+            if (resultJSON != nullptr)
+            {
+                try
+                {
+                    if (auto json = createUTF8FromUTF16 (std::wstring (resultJSON)); ! json.empty())
+                        value = choc::json::parseValue (json);
+                }
+                catch (const std::exception& e)
+                {
+                    errorMessage = e.what();
+                }
+            }
+
+            callback (errorMessage, value);
+            return S_OK;
+        }
+
+        CompletionHandler callback;
+        std::atomic<ULONG> refCount { 0 };
     };
 
     //==============================================================================
@@ -1497,7 +1780,7 @@ private:
         if (lastSlash != std::wstring::npos)
             currentExeName = currentExeName.substr (lastSlash + 1);
 
-        if (SUCCEEDED (SHGetFolderPathW (nullptr, CSIDL_APPDATA, nullptr, 0, dataPath)))
+        if (SHGetFolderPathW (nullptr, CSIDL_APPDATA, nullptr, 0, dataPath) == S_OK)
         {
             auto path = std::wstring (dataPath);
 
@@ -1537,10 +1820,15 @@ inline WebView::~WebView()
 }
 
 inline bool WebView::loadedOK() const                                { return pimpl != nullptr; }
-inline bool WebView::navigate (const std::string& url)               { return pimpl != nullptr && pimpl->navigate (url.empty() ? "about:blank" : url); }
+inline bool WebView::navigate (const std::string& url)               { return pimpl != nullptr && pimpl->navigate (url); }
 inline bool WebView::setHTML (const std::string& html)               { return pimpl != nullptr && pimpl->setHTML (html); }
 inline bool WebView::addInitScript (const std::string& script)       { return pimpl != nullptr && pimpl->addInitScript (script); }
-inline bool WebView::evaluateJavascript (const std::string& script)  { return pimpl != nullptr && pimpl->evaluateJavascript (script); }
+
+inline bool WebView::evaluateJavascript (const std::string& script, CompletionHandler completionHandler)
+{
+    return pimpl != nullptr && pimpl->evaluateJavascript (script, std::move (completionHandler));
+}
+
 inline void* WebView::getViewHandle() const                          { return pimpl != nullptr ? pimpl->getViewHandle() : nullptr; }
 
 inline bool WebView::bind (const std::string& functionName, CallbackFn&& fn)
@@ -1606,7 +1894,11 @@ inline void WebView::invokeBinding (const std::string& msg)
 
         try
         {
+            auto deletionChecker = pimpl->deletionChecker;
             auto result = b->second (json["params"]);
+
+            if (deletionChecker->deleted) // in case the WebView was deleted during the callback
+                return;
 
             auto call = callbackItem + ".resolve(" + choc::json::toString (result) + "); delete " + callbackItem + ";";
             evaluateJavascript (call);
@@ -1620,6 +1912,42 @@ inline void WebView::invokeBinding (const std::string& msg)
     }
     catch (const std::exception&)
     {}
+}
+
+inline std::string WebView::getURIHome (const Options& options)
+{
+    if (! options.customSchemeURI.empty())
+    {
+        if (choc::text::endsWith (options.customSchemeURI, "/"))
+            return options.customSchemeURI;
+
+        return options.customSchemeURI + "/";
+    }
+
+   #if CHOC_WINDOWS
+    return "https://choc.localhost/";
+   #else
+    return "choc://choc.choc/";
+   #endif
+}
+
+inline std::string WebView::getURIScheme (const Options& options)
+{
+    auto uri = getURIHome (options);
+    auto colon = uri.find (":");
+    CHOC_ASSERT (colon != std::string::npos && colon != 0); // need to provide a valid URI with a scheme at the start.
+    return uri.substr (0, colon);
+}
+
+inline WebView::Options::Resource::Resource (std::string_view content, std::string mime)
+{
+    if (! content.empty())
+    {
+        auto src = content.data();
+        data.insert (data.end(), src, src + content.length());
+    }
+
+    mimeType = std::move (mime);
 }
 
 } // namespace choc::ui
