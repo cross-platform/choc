@@ -72,6 +72,7 @@ public:
     {
         /// If supported, this enables developer features in the browser
         bool enableDebugMode = false;
+        bool enableContextMenu = true;
 
         /// On OSX, setting this to true will allow the first click on a non-focused
         /// webview to be used as input, rather than the default behaviour, which is
@@ -1479,6 +1480,7 @@ private:
                          && settings != nullptr)
                     {
                         settings->put_AreDevToolsEnabled (options.enableDebugMode);
+                        settings->put_AreDefaultContextMenusEnabled (options.enableContextMenu);
 
                         if (! options.customUserAgent.empty())
                         {
