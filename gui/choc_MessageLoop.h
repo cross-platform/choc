@@ -185,8 +185,8 @@ struct Timer::Pimpl
     ~Pimpl()
     {
         if (sharedState->isInCallback)
-            sharedState->isRemoved = true;
-        else
+            sharedState->isRunning = false;
+        else if (sharedState->isRunning)
             g_source_remove (handle);
     }
 
@@ -199,14 +199,18 @@ struct Timer::Pimpl
     struct SharedState  : public std::enable_shared_from_this<SharedState>
     {
         Callback callback;
-        bool isInCallback = false, isRemoved = false;
+        bool isInCallback = false, isRunning = true;
 
         bool handleCallback()
         {
             isInCallback = true;
             bool result = callback();
             isInCallback = false;
-            return result && ! isRemoved;
+
+            if (! result)
+                isRunning = false;
+
+            return isRunning;
         }
     };
 
@@ -388,7 +392,7 @@ struct Timer::Pimpl
 
         bool invokeIfStillAlive (Pimpl* p)
         {
-            std::lock_guard<decltype(lock)> l (lock);
+            std::scoped_lock l (lock);
 
             // must check before AND after the call because the Pimpl
             // may be deleted during the callback
@@ -399,13 +403,13 @@ struct Timer::Pimpl
 
         void add (Pimpl* p)
         {
-            std::lock_guard<decltype(lock)> l (lock);
+            std::scoped_lock l (lock);
             timers.insert (p);
         }
 
         void remove (Pimpl* p)
         {
-            std::lock_guard<decltype(lock)> l (lock);
+            std::scoped_lock l (lock);
             timers.erase (p);
         }
     };
