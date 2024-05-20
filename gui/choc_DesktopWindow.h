@@ -408,7 +408,7 @@ struct DesktopWindow::Pimpl
                                     choc::messageloop::postMessage ([callback] { callback(); });
 
                                 CHOC_AUTORELEASE_END
-                                return TRUE;
+                                return FALSE;
                             }),
                             "c@:@");
 
