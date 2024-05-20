@@ -792,7 +792,7 @@ private:
         {
             case WM_NCCREATE:        enableNonClientDPIScaling (h); break;
             case WM_SIZE:            if (auto w = getPimpl (h)) w->handleSizeChange(); break;
-            case WM_CLOSE:           if (auto w = getPimpl (h)) w->handleClose(); return 0;
+            case WM_CLOSE:           if (auto w = getPimpl (h)) w->handleClose(); return 1;
             case WM_GETMINMAXINFO:   if (auto w = getPimpl (h)) w->getMinMaxInfo (*(LPMINMAXINFO) lp); return 0;
             default:                 break;
         }
