@@ -1799,7 +1799,7 @@ private:
             if (! path.empty() && path.back() != L'\\')
                 path += L"\\";
 
-            return path + currentExeName;
+            return path + currentExeName.substr (0, currentExeName.size() - 4);
         }
 
         return {};
