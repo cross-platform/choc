@@ -98,6 +98,7 @@ struct DesktopWindow
     std::function<void()> windowResized;
     /// An optional callback that will be called when the parent window is closed
     std::function<void()> windowClosed;
+    std::function<void()> windowClosing;
 
 private:
     struct Pimpl;
@@ -400,15 +401,23 @@ struct DesktopWindow::Pimpl
             class_addMethod (delegateClass, sel_registerName ("windowShouldClose:"),
                             (IMP) (+[](id self, SEL, id) -> BOOL
                             {
+                                unsigned char result = TRUE;
+
                                 CHOC_AUTORELEASE_BEGIN
                                 auto& p = getPimplFromContext (self);
                                 p.window = {};
 
-                                if (auto callback = p.owner.windowClosed)
+                                if (auto callback = p.owner.windowClosing)
+                                {
+                                    choc::messageloop::postMessage ([callback] { callback(); });
+                                    result = FALSE;
+                                }
+                                else if (auto callback = p.owner.windowClosed)
                                     choc::messageloop::postMessage ([callback] { callback(); });
 
                                 CHOC_AUTORELEASE_END
-                                return FALSE;
+
+                                return result;
                             }),
                             "c@:@");
 
@@ -756,10 +765,18 @@ private:
         }
     }
 
-    void handleClose()
+    LRESULT handleClose()
     {
+        if (owner.windowClosing != nullptr)
+        {
+            owner.windowClosing();
+            return 1;
+        }
+
         if (owner.windowClosed != nullptr)
             owner.windowClosed();
+
+        return 0;
     }
 
     void handleSizeChange()
@@ -792,7 +809,7 @@ private:
         {
             case WM_NCCREATE:        enableNonClientDPIScaling (h); break;
             case WM_SIZE:            if (auto w = getPimpl (h)) w->handleSizeChange(); break;
-            case WM_CLOSE:           if (auto w = getPimpl (h)) w->handleClose(); return 1;
+            case WM_CLOSE:           if (auto w = getPimpl (h)) return w->handleClose();
             case WM_GETMINMAXINFO:   if (auto w = getPimpl (h)) w->getMinMaxInfo (*(LPMINMAXINFO) lp); return 0;
             default:                 break;
         }
