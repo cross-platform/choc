@@ -220,6 +220,10 @@ struct choc::ui::WebView::Pimpl
         webview = webkit_web_view_new_with_context (webviewContext);
         g_object_ref_sink (G_OBJECT (webview));
         manager = webkit_web_view_get_user_content_manager (WEBKIT_WEB_VIEW (webview));
+        
+        auto dataManager = webkit_web_context_get_website_data_manager(webviewContext);
+        auto cookieManager = webkit_website_data_manager_get_cookie_manager(dataManager);
+        webkit_cookie_manager_set_persistent_storage(cookieManager, (std::string(getenv( "TMPDIR" )) + "/choc-webview.cookies").c_str(), WebKitCookiePersistentStorage::WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
 
         signalHandlerID = g_signal_connect (manager, "script-message-received::external",
                                             G_CALLBACK (+[] (WebKitUserContentManager*, WebKitJavascriptResult* r, gpointer arg)
