@@ -165,6 +165,8 @@ public:
     /// Returns a platform-specific handle for this view
     void* getViewHandle() const;
 
+    void onNewWindow(const std::function<void*(const std::string&)>& callback);
+
 private:
     //==============================================================================
     struct Pimpl;
@@ -223,12 +225,25 @@ struct choc::ui::WebView::Pimpl
         
         auto dataManager = webkit_web_context_get_website_data_manager(webviewContext);
         auto cookieManager = webkit_website_data_manager_get_cookie_manager(dataManager);
-        webkit_cookie_manager_set_persistent_storage(cookieManager, (std::string(getenv( "TMPDIR" )) + "/choc-webview.cookies").c_str(), WebKitCookiePersistentStorage::WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
+        webkit_cookie_manager_set_persistent_storage(cookieManager, (std::string(getenv( "HOME" )) + "/.choc.webview.cookies").c_str(), WebKitCookiePersistentStorage::WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
 
         signalHandlerID = g_signal_connect (manager, "script-message-received::external",
                                             G_CALLBACK (+[] (WebKitUserContentManager*, WebKitJavascriptResult* r, gpointer arg)
                                             {
                                                 static_cast<Pimpl*> (arg)->invokeCallback (r);
+                                            }),
+                                            this);
+
+        signalHandlerID2 = g_signal_connect (webview, "create",
+                                            G_CALLBACK (+[] (WebKitWebView*, WebKitNavigationAction* act, gpointer arg)
+                                            {
+                                                if (static_cast<Pimpl*> (arg)->newWindow)
+                                                {
+                                                    auto req = webkit_navigation_action_get_request(act);
+                                                    auto uri = webkit_uri_request_get_uri(req);
+                                                    return (GtkWidget*)static_cast<Pimpl*> (arg)->newWindow(uri);
+                                                }
+                                                return (GtkWidget*)nullptr;
                                             }),
                                             this);
 
@@ -312,6 +327,9 @@ struct choc::ui::WebView::Pimpl
 
         if (signalHandlerID != 0 && webview != nullptr)
             g_signal_handler_disconnect (manager, signalHandlerID);
+
+        if (signalHandlerID2 != 0 && webview != nullptr)
+            g_signal_handler_disconnect (webview, signalHandlerID2);
 
         g_clear_object (&webview);
         g_clear_object (&webviewContext);
@@ -457,6 +475,8 @@ struct choc::ui::WebView::Pimpl
     WebKitUserContentManager* manager = {};
     std::string defaultURI;
     unsigned long signalHandlerID = 0;
+    unsigned long signalHandlerID2 = 0;
+    std::function<void*(const std::string&)> newWindow = nullptr;
 };
 
 //==============================================================================
@@ -1845,6 +1865,11 @@ inline bool WebView::evaluateJavascript (const std::string& script, CompletionHa
 }
 
 inline void* WebView::getViewHandle() const                          { return pimpl != nullptr ? pimpl->getViewHandle() : nullptr; }
+
+inline void WebView::onNewWindow (const std::function<void*(const std::string&)>& callback)
+{
+    pimpl->newWindow = callback;
+}
 
 inline bool WebView::bind (const std::string& functionName, CallbackFn&& fn)
 {
