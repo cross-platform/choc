@@ -647,6 +647,8 @@ struct choc::ui::WebView::Pimpl
         return {};
     }
 
+    std::function<void*(const std::string&)> newWindow = nullptr;
+
 private:
     id createDelegate()
     {
