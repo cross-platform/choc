@@ -19,67 +19,69 @@
 #ifndef CHOC_TESTS_HEADER_INCLUDED
 #define CHOC_TESTS_HEADER_INCLUDED
 
-#include "../containers/choc_ZipFile.h"
-#include "../platform/choc_FileWatcher.h"
-#include "../threading/choc_ThreadSafeFunctor.h"
-#include "../threading/choc_TaskThread.h"
-#include "../gui/choc_MessageLoop.h"
-#include "../gui/choc_WebView.h"
-#include "../text/choc_OpenSourceLicenseList.h"
-#include "../audio/choc_AudioFileFormat_MP3.h"
-#include "../audio/choc_AudioFileFormat_FLAC.h"
-#include "../audio/choc_AudioFileFormat_Ogg.h"
-#include "../audio/choc_AudioFileFormat_WAV.h"
-#include "../memory/choc_VariableLengthEncoding.h"
-#include "../containers/choc_NonAllocatingStableSort.h"
-#include "../platform/choc_DetectDebugger.h"
-#include "../platform/choc_Platform.h"
-#include "../threading/choc_SpinLock.h"
-#include "../platform/choc_DynamicLibrary.h"
-#include "../memory/choc_Endianness.h"
-#include "../text/choc_CodePrinter.h"
-#include "../text/choc_FloatToString.h"
-#include "../text/choc_HTML.h"
-#include "../text/choc_JSON.h"
-#include "../text/choc_StringUtilities.h"
-#include "../text/choc_UTF8.h"
-#include "../text/choc_TextTable.h"
-#include "../text/choc_Files.h"
-#include "../text/choc_Wildcard.h"
-#include "../network/choc_MIMETypes.h"
-#include "../memory/choc_Base64.h"
-#include "../memory/choc_xxHash.h"
-#include "../math/choc_MathHelpers.h"
-#include "../containers/choc_COM.h"
-#include "../containers/choc_DirtyList.h"
-#include "../containers/choc_Span.h"
-#include "../containers/choc_Value.h"
-#include "../containers/choc_MultipleReaderMultipleWriterFIFO.h"
-#include "../containers/choc_SingleReaderMultipleWriterFIFO.h"
-#include "../containers/choc_SingleReaderSingleWriterFIFO.h"
-#include "../containers/choc_VariableSizeFIFO.h"
-#include "../containers/choc_SmallVector.h"
-#include "../memory/choc_PoolAllocator.h"
-#include "../memory/choc_ObjectPointer.h"
-#include "../memory/choc_ObjectReference.h"
-#include "../memory/choc_AlignedMemoryBlock.h"
-#include "../audio/choc_MIDI.h"
-#include "../audio/choc_MIDIFile.h"
-#include "../audio/choc_Oscillators.h"
-#include "../audio/choc_SampleBuffers.h"
-#include "../audio/choc_AudioSampleData.h"
-#include "../audio/choc_SincInterpolator.h"
-#include "../audio/choc_SampleBufferUtilities.h"
-#include "../audio/choc_AudioMIDIBlockDispatcher.h"
-#include "../javascript/choc_javascript.h"
-#include "../javascript/choc_javascript_Timer.h"
-#include "../javascript/choc_javascript_Console.h"
+#include "../choc/platform/choc_BuildDate.h"
+#include "../choc/containers/choc_ZipFile.h"
+#include "../choc/platform/choc_Execute.h"
+#include "../choc/platform/choc_FileWatcher.h"
+#include "../choc/threading/choc_ThreadSafeFunctor.h"
+#include "../choc/threading/choc_TaskThread.h"
+#include "../choc/gui/choc_MessageLoop.h"
+#include "../choc/gui/choc_WebView.h"
+#include "../choc/text/choc_OpenSourceLicenseList.h"
+#include "../choc/audio/choc_AudioFileFormat_MP3.h"
+#include "../choc/audio/choc_AudioFileFormat_FLAC.h"
+#include "../choc/audio/choc_AudioFileFormat_Ogg.h"
+#include "../choc/audio/choc_AudioFileFormat_WAV.h"
+#include "../choc/memory/choc_VariableLengthEncoding.h"
+#include "../choc/containers/choc_NonAllocatingStableSort.h"
+#include "../choc/platform/choc_DetectDebugger.h"
+#include "../choc/platform/choc_Platform.h"
+#include "../choc/threading/choc_SpinLock.h"
+#include "../choc/platform/choc_DynamicLibrary.h"
+#include "../choc/memory/choc_Endianness.h"
+#include "../choc/text/choc_CodePrinter.h"
+#include "../choc/text/choc_FloatToString.h"
+#include "../choc/text/choc_HTML.h"
+#include "../choc/text/choc_JSON.h"
+#include "../choc/text/choc_StringUtilities.h"
+#include "../choc/text/choc_UTF8.h"
+#include "../choc/text/choc_TextTable.h"
+#include "../choc/text/choc_Files.h"
+#include "../choc/text/choc_Wildcard.h"
+#include "../choc/network/choc_MIMETypes.h"
+#include "../choc/memory/choc_Base64.h"
+#include "../choc/memory/choc_xxHash.h"
+#include "../choc/math/choc_MathHelpers.h"
+#include "../choc/containers/choc_COM.h"
+#include "../choc/containers/choc_DirtyList.h"
+#include "../choc/containers/choc_Span.h"
+#include "../choc/containers/choc_Value.h"
+#include "../choc/containers/choc_MultipleReaderMultipleWriterFIFO.h"
+#include "../choc/containers/choc_SingleReaderMultipleWriterFIFO.h"
+#include "../choc/containers/choc_SingleReaderSingleWriterFIFO.h"
+#include "../choc/containers/choc_VariableSizeFIFO.h"
+#include "../choc/containers/choc_SmallVector.h"
+#include "../choc/memory/choc_PoolAllocator.h"
+#include "../choc/memory/choc_ObjectPointer.h"
+#include "../choc/memory/choc_ObjectReference.h"
+#include "../choc/memory/choc_AlignedMemoryBlock.h"
+#include "../choc/audio/choc_MIDI.h"
+#include "../choc/audio/choc_MIDIFile.h"
+#include "../choc/audio/choc_Oscillators.h"
+#include "../choc/audio/choc_SampleBuffers.h"
+#include "../choc/audio/choc_AudioSampleData.h"
+#include "../choc/audio/choc_SincInterpolator.h"
+#include "../choc/audio/choc_SampleBufferUtilities.h"
+#include "../choc/audio/choc_AudioMIDIBlockDispatcher.h"
+#include "../choc/javascript/choc_javascript.h"
+#include "../choc/javascript/choc_javascript_Timer.h"
+#include "../choc/javascript/choc_javascript_Console.h"
 
 #if CHOC_ENABLE_HTTP_SERVER_TEST
- #include "../network/choc_HTTPServer.h"
+ #include "../choc/network/choc_HTTPServer.h"
 #endif
 
-#include "choc_UnitTest.h"
+#include "../choc/platform/choc_UnitTest.h"
 #include <future>
 
 /**
@@ -101,6 +103,8 @@ namespace choc_unit_tests
 /// to log its progress.
 bool runAllTests (choc::test::TestProgress&);
 
+/// Performs the setup function, then waits for it to call the exit function provided,
+/// then calls handleResult
 static void runTestOnMessageThread (std::function<void(const std::function<void()>&)> setup,
                                     std::function<void()> handleResult = {})
 {
@@ -138,6 +142,13 @@ inline void testPlatform (choc::test::TestProgress& progress)
     {
         CHOC_TEST (DetectDebugger)
         CHOC_EXPECT_FALSE (choc::isDebuggerActive());
+    }
+
+    {
+        CHOC_TEST (BuildDate)
+        // For the purpose of testing, we'll assume you always do a fresh build
+        // before running this.
+        CHOC_EXPECT_TRUE (choc::getDaysSinceBuildDate() < 5);
     }
 
     {
@@ -758,6 +769,16 @@ inline void testValues (choc::test::TestProgress& progress)
         {
             CHOC_EXPECT_EQ (e.description, std::string ("Index out of range"));
         }
+
+        try
+        {
+            auto o = choc::value::createObject (std::string_view ("xx\0x", 4u));
+            CHOC_FAIL ("Failed to fail");
+        }
+        catch (choc::value::Error& e)
+        {
+            CHOC_EXPECT_EQ (e.description, std::string ("Object names may not contain a null character"));
+        }
     }
 
     {
@@ -1230,10 +1251,105 @@ inline void testMIDI (choc::test::TestProgress& progress)
     }
 
     {
-        CHOC_TEST (ShortMessages)
+        CHOC_TEST (CreationFunctions)
 
         choc::midi::ShortMessage msg;
         CHOC_EXPECT_TRUE (msg.isNull());
+
+        auto m1 = choc::midi::noteOn (2, 60, 100);
+        CHOC_EXPECT_TRUE (m1.isNoteOn());
+        CHOC_EXPECT_EQ (m1.getChannel1to16(), 2);
+        CHOC_EXPECT_EQ (m1.getNoteNumber(), 60);
+        CHOC_EXPECT_EQ (m1.getVelocity(), 100);
+
+        auto m2 = choc::midi::noteOff (3, 61, 101);
+        CHOC_EXPECT_TRUE (m2.isNoteOff());
+        CHOC_EXPECT_EQ (m2.getChannel1to16(), 3);
+        CHOC_EXPECT_EQ (m2.getNoteNumber(), 61);
+        CHOC_EXPECT_EQ (m2.getVelocity(), 101);
+
+        auto m3 = choc::midi::controlChange (4, 62, 102);
+        CHOC_EXPECT_TRUE (m3.isController());
+        CHOC_EXPECT_EQ (m3.getChannel1to16(), 4);
+        CHOC_EXPECT_EQ (m3.getControllerNumber(), 62);
+        CHOC_EXPECT_EQ (m3.getControllerValue(), 102);
+
+        auto m4 = choc::midi::programChange (5, 63);
+        CHOC_EXPECT_TRUE (m4.isProgramChange());
+        CHOC_EXPECT_EQ (m4.getChannel1to16(), 5);
+        CHOC_EXPECT_EQ (m4.getProgramChangeNumber(), 63);
+
+        auto m5 = choc::midi::pitchBend (6, 12345);
+        CHOC_EXPECT_TRUE (m5.isPitchWheel());
+        CHOC_EXPECT_EQ (m5.getChannel1to16(), 6);
+        CHOC_EXPECT_EQ (m5.getPitchWheelValue(), 12345u);
+
+        auto m6 = choc::midi::channelPressure (7, 103);
+        CHOC_EXPECT_TRUE (m6.isChannelPressure());
+        CHOC_EXPECT_EQ (m6.getChannel1to16(), 7);
+        CHOC_EXPECT_EQ (m6.getChannelPressureValue(), 103);
+
+        auto m7 = choc::midi::polyphonicAftertouch (8, 64, 104);
+        CHOC_EXPECT_TRUE (m7.isAftertouch());
+        CHOC_EXPECT_EQ (m7.getChannel1to16(), 8);
+        CHOC_EXPECT_EQ (m7.getNoteNumber(), 64);
+        CHOC_EXPECT_EQ (m7.getAfterTouchValue(), 104);
+
+        uint8_t sysexData[] = { 1, 2, 3, 4, 5 };
+        auto m8 = choc::midi::sysex (sysexData, sizeof (sysexData));
+        CHOC_EXPECT_TRUE (m8.isSysex());
+        CHOC_EXPECT_EQ (m8.size(), sizeof (sysexData) + 2);
+        CHOC_EXPECT_EQ (m8.data()[0], 0xf0);
+        CHOC_EXPECT_EQ (m8.data()[6], 0xf7);
+        CHOC_EXPECT_TRUE (memcmp (m8.data() + 1, sysexData, sizeof (sysexData)) == 0);
+
+        auto m9 = choc::midi::allNotesOff (9);
+        CHOC_EXPECT_TRUE (m9.isAllNotesOff());
+        CHOC_EXPECT_EQ (m9.getChannel1to16(), 9);
+
+        auto m10 = choc::midi::allSoundOff (10);
+        CHOC_EXPECT_TRUE (m10.isAllSoundOff());
+        CHOC_EXPECT_EQ (m10.getChannel1to16(), 10);
+
+        auto m11 = choc::midi::resetAllControllers (11);
+        CHOC_EXPECT_TRUE (m11.isController());
+        CHOC_EXPECT_EQ (m11.getChannel1to16(), 11);
+        CHOC_EXPECT_EQ (m11.getControllerNumber(), 121);
+
+        auto m12 = choc::midi::localControl (12, true);
+        CHOC_EXPECT_TRUE (m12.isController());
+        CHOC_EXPECT_EQ (m12.getChannel1to16(), 12);
+        CHOC_EXPECT_EQ (m12.getControllerNumber(), 122);
+        CHOC_EXPECT_EQ (m12.getControllerValue(), 127);
+
+        auto m13 = choc::midi::songPositionPointer (12345);
+        CHOC_EXPECT_TRUE (m13.isSongPositionPointer());
+        CHOC_EXPECT_EQ (m13.getSongPositionPointerValue(), 12345u);
+
+        auto m14 = choc::midi::songSelect (105);
+        CHOC_EXPECT_EQ (m14.data()[0], 0xf3);
+        CHOC_EXPECT_EQ (m14.data()[1], 105);
+
+        auto m15 = choc::midi::tuneRequest();
+        CHOC_EXPECT_EQ (m15.data()[0], 0xf6);
+
+        auto m16 = choc::midi::timingClock();
+        CHOC_EXPECT_TRUE (m16.isClock());
+
+        auto m17 = choc::midi::start();
+        CHOC_EXPECT_TRUE (m17.isStart());
+
+        auto m18 = choc::midi::continuePlayback();
+        CHOC_EXPECT_TRUE (m18.isContinue());
+
+        auto m19 = choc::midi::stop();
+        CHOC_EXPECT_TRUE (m19.isStop());
+
+        auto m20 = choc::midi::activeSensing();
+        CHOC_EXPECT_TRUE (m20.isActiveSense());
+
+        auto m21 = choc::midi::systemReset();
+        CHOC_EXPECT_EQ (m21.data()[0], 0xff);
     }
 }
 
@@ -2044,7 +2160,7 @@ inline void testMIDIFiles (choc::test::TestProgress& progress)
 
             std::string output1, output2;
 
-            mf.iterateEvents ([&] (const choc::midi::Message& m, double time)
+            mf.iterateEvents ([&] (const choc::midi::LongMessage& m, double time)
                               {
                                   output1 += choc::text::floatToString (time, 3) + " " + m.toHexString() + "\n";
                               });
@@ -2055,6 +2171,21 @@ inline void testMIDIFiles (choc::test::TestProgress& progress)
             // This is just a simple regression test to see whether anything changes. Update the hash number if it does.
             CHOC_EXPECT_EQ (5294939095423848520ull, simpleHash (output1));
             CHOC_EXPECT_EQ (output1, output2);
+
+            auto savedData = mf.save();
+            choc::midi::File mf2;
+            mf2.load (savedData.data(), savedData.size());
+
+            auto sequence = mf.toSequence();
+            auto sequence2 = mf2.toSequence();
+
+            CHOC_EXPECT_EQ (sequence.events.size(), sequence2.events.size());
+
+            for (size_t i = 0; i < sequence.events.size(); ++i)
+            {
+                CHOC_EXPECT_NEAR (sequence.events[i].timeStamp, sequence2.events[i].timeStamp, 0.001);
+                CHOC_EXPECT_TRUE (sequence.events[i].message == sequence2.events[i].message);
+            }
         }
         CHOC_CATCH_UNEXPECTED_EXCEPTION
 
@@ -2066,6 +2197,34 @@ inline void testMIDIFiles (choc::test::TestProgress& progress)
             CHOC_FAIL ("Expected a failure")
         }
         catch (...) {}
+    }
+
+    {
+        CHOC_TEST (MIDIFileWrite)
+
+        choc::midi::Sequence sequence;
+
+        for (int i = 0; i < 100; ++i)
+        {
+            sequence.events.push_back ({ (double) i * 0.1, choc::midi::noteOn (1, (uint8_t) (i + 20), (uint8_t) ((i % 97) + 30)) });
+            sequence.events.push_back ({ (double) i * 0.1 + 0.05, choc::midi::noteOff (1, (uint8_t) (i + 20), 0) });
+        }
+
+        choc::midi::File file (sequence);
+        auto savedData = file.save();
+
+        choc::midi::File file2;
+        file2.load (savedData.data(), savedData.size());
+
+        auto sequence2 = file2.toSequence();
+
+        CHOC_EXPECT_EQ (sequence.events.size(), sequence2.events.size());
+
+        for (size_t i = 0; i < sequence.events.size(); ++i)
+        {
+            CHOC_EXPECT_NEAR (sequence.events[i].timeStamp, sequence2.events[i].timeStamp, 0.001);
+            CHOC_EXPECT_TRUE (sequence.events[i].message == sequence2.events[i].message);
+        }
     }
 }
 
@@ -2405,6 +2564,38 @@ inline void testWebview (choc::test::TestProgress& progress)
         {
             choc::ui::WebView::Options opts;
             opts.enableDebugMode = true;
+
+            opts.webviewIsReady = [&] (choc::ui::WebView& w)
+            {
+                w.bind ("succeeded", [&] (const choc::value::ValueView& args)
+                {
+                    result = choc::json::toString (args);
+                    finished();
+                    return choc::value::Value();
+                });
+
+                w.evaluateJavascript ("let a = { x: [1, 2, 3], y: 987.0, z: true }; a", [&] (const std::string& error, const choc::value::ValueView& value)
+                {
+                    error1 = error; value1 = value;
+                });
+
+                w.evaluateJavascript ("return 1234;", [&] (const std::string& error, const choc::value::ValueView& value)
+                {
+                    error2 = error; value2 = value;
+                });
+
+                w.evaluateJavascript ("", [&] (const std::string& error, const choc::value::ValueView& value)
+                {
+                    error3 = error; value3 = value;
+                });
+
+                timer = choc::messageloop::Timer (200, [&]
+                {
+                    w.evaluateJavascript ("succeeded (1234, 5678);");
+                    return false;
+                });
+            };
+
             webview = std::make_unique<choc::ui::WebView> (opts);
 
             if (! webview->loadedOK())
@@ -2414,34 +2605,6 @@ inline void testWebview (choc::test::TestProgress& progress)
                 finished();
                 return;
             }
-
-            webview->bind ("succeeded", [&] (const choc::value::ValueView& args)
-            {
-                result = choc::json::toString (args);
-                finished();
-                return choc::value::Value();
-            });
-
-            webview->evaluateJavascript ("let a = { x: [1, 2, 3], y: 987.0, z: true }; a", [&] (const std::string& error, const choc::value::ValueView& value)
-            {
-                error1 = error; value1 = value;
-            });
-
-            webview->evaluateJavascript ("return 1234;", [&] (const std::string& error, const choc::value::ValueView& value)
-            {
-                error2 = error; value2 = value;
-            });
-
-            webview->evaluateJavascript ("", [&] (const std::string& error, const choc::value::ValueView& value)
-            {
-                error3 = error; value3 = value;
-            });
-
-            timer = choc::messageloop::Timer (200, [&]
-            {
-                webview->evaluateJavascript ("succeeded (1234, 5678);");
-                return false;
-            });
         },
         [&] { webview.reset(); timer = {}; });
 
@@ -2451,7 +2614,9 @@ inline void testWebview (choc::test::TestProgress& progress)
         CHOC_EXPECT_EQ (result, "[1234, 5678]");
         CHOC_EXPECT_TRUE (error1.empty());
         CHOC_EXPECT_EQ (choc::json::toString (value1), R"({"x": [1, 2, 3], "y": 987, "z": true})");
-        CHOC_EXPECT_TRUE (! error2.empty());
+       #if ! CHOC_WINDOWS
+        CHOC_EXPECT_TRUE (! error2.empty()); // Windows browser seems to not do this one correctly
+       #endif
         CHOC_EXPECT_TRUE (value2.isVoid());
         CHOC_EXPECT_TRUE (error3.empty());
         CHOC_EXPECT_TRUE (value3.isVoid());
@@ -2485,21 +2650,24 @@ fetch (new Request("./hello.txt"))
 
         runTestOnMessageThread ([&] (const std::function<void()>& finished)
         {
+            opts.webviewIsReady = [&] (choc::ui::WebView& w)
+            {
+                if (! w.loadedOK())
+                {
+                    std::cout << "WebView was unavailable" << std::endl;
+                    finished();
+                    return;
+                }
+
+                w.bind ("succeeded", [&] (const choc::value::ValueView& args)
+                {
+                    result = choc::json::toString (args);
+                    finished();
+                    return choc::value::Value();
+                });
+            };
+
             webview = std::make_unique<choc::ui::WebView> (opts);
-
-            if (! webview->loadedOK())
-            {
-                std::cout << "WebView was unavailable" << std::endl;
-                finished();
-                return;
-            }
-
-            webview->bind ("succeeded", [&] (const choc::value::ValueView& args)
-            {
-                result = choc::json::toString (args);
-                finished();
-                return choc::value::Value();
-            });
         },
         [&] { webview.reset(); });
 
@@ -2838,8 +3006,8 @@ inline void testThreading (choc::test::TestProgress& progress)
         choc::threading::TaskThread tt1, tt2;
         std::atomic<int> numCallbacks1 { 0 }, numCallbacks2 { 0 };
 
-        tt1.start (100, [&] { ++numCallbacks1; });
-        tt2.start (0,   [&] { ++numCallbacks2; });
+        tt1.start (std::chrono::milliseconds (100), [&] { ++numCallbacks1; });
+        tt2.start (0,                               [&] { ++numCallbacks2; });
 
         std::this_thread::sleep_for (std::chrono::milliseconds (50));
         CHOC_EXPECT_EQ (0, numCallbacks2.load());
@@ -2849,10 +3017,10 @@ inline void testThreading (choc::test::TestProgress& progress)
         {
             std::this_thread::sleep_for (std::chrono::milliseconds (5));
 
-            if (numCallbacks1 == 3)
+            if (numCallbacks1 == 3 && numCallbacks2 == 1)
                 break;
 
-            if (i > 100)
+            if (i > 500)
                 CHOC_FAIL ("Expected some callbacks");
         }
 
@@ -2866,7 +3034,9 @@ inline void testThreading (choc::test::TestProgress& progress)
             choc::threading::ThreadSafeFunctor<std::function<void(int)>> tsf;
 
             int result = 0;
+            CHOC_EXPECT_FALSE (tsf);
             tsf = [&] (int x) { result = x; };
+            CHOC_EXPECT_TRUE (tsf);
             CHOC_EXPECT_TRUE (tsf (2));
             tsf.reset();
             CHOC_EXPECT_FALSE (tsf (3));
@@ -3150,6 +3320,24 @@ static void testZipFile (choc::test::TestProgress& progress)
 }
 
 //==============================================================================
+static void testExecute (choc::test::TestProgress& progress)
+{
+    CHOC_CATEGORY (Exec);
+
+    try
+    {
+        CHOC_TEST (Exec)
+        auto r1 = choc::execute ("echo \"xyz\"", true);
+        CHOC_EXPECT_EQ (r1.statusCode, 0);
+        CHOC_EXPECT_TRUE (choc::text::contains (r1.output, "xyz"));
+
+        auto r2 = choc::execute ("skfgdgj", true);
+        CHOC_EXPECT_NE (r2.statusCode, 0);
+    }
+    CHOC_CATCH_UNEXPECTED_EXCEPTION
+}
+
+//==============================================================================
 static void testHTTPServer (choc::test::TestProgress& progress)
 {
     (void) progress;
@@ -3171,7 +3359,7 @@ static void testHTTPServer (choc::test::TestProgress& progress)
                 [] (boost::beast::websocket::request_type& req)
                 {
                     req.set (boost::beast::http::field::user_agent,
-                        std::string (BOOST_BEAST_VERSION_STRING) + " websocket-client-coro");
+                             std::string (BOOST_BEAST_VERSION_STRING) + " websocket-client-coro");
                 }));
 
             // Perform the websocket handshake
@@ -3236,7 +3424,7 @@ static void testHTTPServer (choc::test::TestProgress& progress)
 
                 // Prepare another read callback to be processed by the thread
                 ws.async_read (destBuffer,
-                            [this] (auto code, auto bytes) { readMessage (code, bytes); });
+                               [this] (auto code, auto bytes) { readMessage (code, bytes); });
             }
         }
     };
@@ -3349,6 +3537,7 @@ inline bool runAllTests (choc::test::TestProgress& progress, bool multithread)
 
     std::function<void(choc::test::TestProgress&)> testFunctions[] =
     {
+        testExecute,
         testHTTPServer,
         testZLIB,
         testZipFile,
